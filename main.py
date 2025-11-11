@@ -20,9 +20,9 @@ CHANNEL_IDS = [1372406245251747941, 1379920251374014524, 677045772394561548]
             # [#builds, #main, Testing/#general]
 
 TZ = ZoneInfo("America/Los_Angeles")
-REMINDER_DAY = 1     # Tuesday (Mon=0, Tue=1, etc)
-REMINDER_HOUR = 16   # 0-23
-REMINDER_MINUTE = 30 # 0-59
+REMINDER_DAY = 5     # Saturday (Mon=0, Tue=1, Wed=2, Thur=3, Fri=4, Sat=5, Sun=6)
+REMINDER_HOUR = 15   # 0-23
+REMINDER_MINUTE = 00 # 0-59
 
 # reminder on saturdays at 2:50 pm
 REMINDER2_DAY = 5     # Saturday
@@ -38,7 +38,7 @@ intents.members = True
 bot = commands.Bot(command_prefix='!', intents=intents)
 
 @tasks.loop(time=datetime.time(hour=REMINDER_HOUR, minute=REMINDER_MINUTE, tzinfo=TZ))
-async def build_reminder(): ### Tuesday Engineering reminder
+async def build_reminder(): ### Saturday (Previously Tuesday) Engineering reminder
     now = datetime.datetime.now(TZ)
     if now.weekday() != REMINDER_DAY:
         return
@@ -50,7 +50,7 @@ async def build_reminder(): ### Tuesday Engineering reminder
         print("Channel not found")
         return
 
-    reminder_message = await channel.send(f'<@&{ROLE_IDS[1]}> - Can you confirm "✅ Build is in" by 5:00 PM PT?\n<@&{ROLE_IDS[0]}> reminder: upload by 5:00 PM PT.')
+    reminder_message = await channel.send(f'<@&{ROLE_IDS[1]}> - Can you confirm "✅ Build is in" by 8:00 PM PT?\n<@&{ROLE_IDS[0]}> reminder: upload by 8:00 PM PT.')
     await reminder_message.add_reaction("✅")
 
     print(f"[{datetime.datetime.now()}] Reminder sent in #{channel.name} (ID: {CHANNEL_IDS[0]})")
@@ -67,12 +67,12 @@ async def build_reminder(): ### Tuesday Engineering reminder
         return any(role.id in ROLE_IDS for role in member.roles)
 
     try:
-        reaction, user = await bot.wait_for('reaction_add', timeout=35*60.0, check=check) # 35 minutes
+        reaction, user = await bot.wait_for('reaction_add', timeout=300*60.0, check=check) # 300 minutes -> 5 hrs (Previously 35 minutes)
         await channel.send(f'✅ Confirmed by {user.name} at {datetime.datetime.now().strftime("%H:%M %p")}!')
         print(f"[{datetime.datetime.now()}] Confirmation received from {user} in #{channel.name}")
 
     except asyncio.TimeoutError:
-        await channel.send(f' <@{ESCALATION_IDS[0]}> <@&{ROLE_IDS[0]}> <@&{ROLE_IDS[1]}> ⏰ No confirmation by 5:00 PM PT. Rohit: please verify with Engineering & Usability.')
+        await channel.send(f' <@{ESCALATION_IDS[0]}> <@&{ROLE_IDS[0]}> <@&{ROLE_IDS[1]}> ⏰ No confirmation by 8:00 PM PT. Rohit: please verify with Engineering & Usability.')
         print(f"[{datetime.datetime.now()}] No confirmation, escalation triggered in #{channel.name}")
 
 @tasks.loop(time=datetime.time(hour=REMINDER2_HOUR, minute=REMINDER2_MINUTE, tzinfo=TZ))
