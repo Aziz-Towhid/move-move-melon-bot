@@ -24,9 +24,9 @@ CHANNEL_IDS = [1372406245251747941, 1379920251374014524, 677045772394561548]
             # [#builds, #main, Testing/#general]
 
 TZ = ZoneInfo("America/Los_Angeles")
-REMINDER_DAY = 1     # Tuesday (Mon=0, Tue=1, etc)
-REMINDER_HOUR = 16   # 0-23
-REMINDER_MINUTE = 30 # 0-59
+REMINDER_DAY = 5     # Saturday (Mon=0, Tue=1, Wed=2, Thur=3, Fri=4, Sat=5, Sun=6)
+REMINDER_HOUR = 15   # 0-23
+REMINDER_MINUTE = 00 # 0-59
 
 # reminder on saturdays at 2:50 pm
 REMINDER2_DAY = 5     # Saturday
@@ -44,7 +44,7 @@ intents.members = True
 bot = commands.Bot(command_prefix='!', intents=intents)
 
 @tasks.loop(time=datetime.time(hour=REMINDER_HOUR, minute=REMINDER_MINUTE, tzinfo=TZ))
-async def build_reminder(): ### Tuesday Engineering reminder
+async def build_reminder(): ### Saturday (Previously Tuesday) Engineering reminder
     now = datetime.datetime.now(TZ)
     if now.weekday() != REMINDER_DAY:
         return
@@ -56,7 +56,7 @@ async def build_reminder(): ### Tuesday Engineering reminder
         print("Channel not found")
         return
 
-    reminder_message = await channel.send(f'<@&{ROLE_IDS[1]}> - Can you confirm "✅ Build is in" by 5:00 PM PT?\n<@&{ROLE_IDS[0]}> reminder: upload by 5:00 PM PT.')
+    reminder_message = await channel.send(f'<@&{ROLE_IDS[1]}> - Can you confirm "✅ Build is in" by 8:00 PM PT?\n<@&{ROLE_IDS[0]}> reminder: upload by 8:00 PM PT.')
     await reminder_message.add_reaction("✅")
     producer_reminder_message = await channel.send(f"Did <@{USER_IDS[0]}> check if the README was updated for today's build?")
     await producer_reminder_message.add_reaction("✅")
@@ -77,25 +77,16 @@ async def build_reminder(): ### Tuesday Engineering reminder
 
         message_id = reaction.message.id
         member = reaction.message.guild.get_member(user.id)
-        if message_id in monitor:
-            expected = monitor[message_id]
-            if ("user_id" in expected and user.id == expected["user_id"]) or ("role_id" in expected and any(role.id in expected["role_id"] for role in member.roles)):
-                if str(reaction.emoji) == expected["emoji"]:
-                    expected["done"] = True
-                    message_string = "🏗️ Build" if ("role_id" in expected) else "📰 README" 
-                    await channel.send(f'✅ {message_string} Confirmed by {user.name} at {datetime.datetime.now().strftime("%H:%M %p")}!')
-                    print(f"[{datetime.datetime.now()}] Confirmation received from {user} in #{channel.name}")
+        return any(role.id in ROLE_IDS for role in member.roles)
 
-    await asyncio.sleep(35*60.0) # wait 35mins
-    for message_id, info in monitor.items():
-        if not info["done"]:
-            if message_id == reminder_message.id:
-                await channel.send(f' <@{ESCALATION_IDS[0]}> <@&{ROLE_IDS[0]}> <@&{ROLE_IDS[1]}> ⏰ No confirmation by 5:00 PM PT. Rohit: please verify with Engineering & Usability.')
-                print(f"[{datetime.datetime.now()}] No confirmation, escalation triggered in #{channel.name}")
-            elif message_id == producer_reminder_message.id:
-                await channel.send(f' <@{USER_IDS[0]}>  🔔 Check README confirmation reminder')
-                print(f"[{datetime.datetime.now()}] No README confirmation, reminder triggered in #{channel.name}")
-            
+    try:
+        reaction, user = await bot.wait_for('reaction_add', timeout=300*60.0, check=check) # 300 minutes -> 5 hrs (Previously 35 minutes)
+        await channel.send(f'✅ Confirmed by {user.name} at {datetime.datetime.now().strftime("%H:%M %p")}!')
+        print(f"[{datetime.datetime.now()}] Confirmation received from {user} in #{channel.name}")
+
+    except asyncio.TimeoutError:
+        await channel.send(f' <@{ESCALATION_IDS[0]}> <@&{ROLE_IDS[0]}> <@&{ROLE_IDS[1]}> ⏰ No confirmation by 8:00 PM PT. Rohit: please verify with Engineering & Usability.')
+        print(f"[{datetime.datetime.now()}] No confirmation, escalation triggered in #{channel.name}")
 
 @tasks.loop(time=datetime.time(hour=REMINDER2_HOUR, minute=REMINDER2_MINUTE, tzinfo=TZ))
 async def lab_reminder(): ### Saturday Leads reminder
