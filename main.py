@@ -23,7 +23,6 @@ ESCALATION_IDS = [622934594609610752]
 CHANNEL_IDS = [1372406245251747941, 1379920251374014524, 677045772394561548]
             # [#builds, #main, Testing/#general]
 
-CHANNEL_IDS = [826650354803408948,826650354803408948] #bot-channel #[1372406245251747941] # [#builds]
 TZ = ZoneInfo("America/Los_Angeles")
 REMINDER_DAY = 5     # Saturday (Mon=0, Tue=1, Wed=2, Thur=3, Fri=4, Sat=5, Sun=6)
 REMINDER_HOUR = 15   # 0-23
