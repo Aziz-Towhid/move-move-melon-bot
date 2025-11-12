@@ -11,11 +11,15 @@ load_dotenv()
 TOKEN = os.getenv('DISCORD_TOKEN')
 
 ROLE_IDS = [1372405122566459433, 1372455418319732926, 1372405444928213093, 745153619313033266]
-         # [Engineering, Usability, Leads, Testing/Owner]
-
+            # [Engineering, Usability, Leads, Testing/Owner]
+USER_IDS = [593182696046329879] 
+            # Ramsey
+IGNORE_USER_IDS = [622934594609610752,692108700705620100] 
+            # Ignore Kristine, ROHIT  for standups
+COLEAD_IDS = [558457237924741130,305785831313113099] 
+            # CJ, Juan only need 1 response for standup - Later can make a dictionary for groups only needing one check instead, but will require more checks/time
 ESCALATION_IDS = [622934594609610752]
-               # [Rohit]
-
+            # [Rohit]
 CHANNEL_IDS = [1372406245251747941, 1379920251374014524, 677045772394561548]
             # [#builds, #main, Testing/#general]
 
@@ -28,7 +32,9 @@ REMINDER_MINUTE = 00 # 0-59
 REMINDER2_DAY = 5     # Saturday
 REMINDER2_HOUR = 14
 REMINDER2_MINUTE = 50
-WAIT_TIME = 10
+FIRST_WAIT = 10*60.00         # 2:50pm - 3pm = 10min
+FINAL_WAIT = 5*60*60+10*60.00 # 2:50pm-8pm = 5h 10min 
+
 
 handler = logging.FileHandler(filename='discord.log', encoding='utf-8', mode='w')
 intents = discord.Intents.default()
@@ -52,17 +58,24 @@ async def build_reminder(): ### Saturday (Previously Tuesday) Engineering remind
 
     reminder_message = await channel.send(f'<@&{ROLE_IDS[1]}> - Can you confirm "✅ Build is in" by 8:00 PM PT?\n<@&{ROLE_IDS[0]}> reminder: upload by 8:00 PM PT.')
     await reminder_message.add_reaction("✅")
-
+    producer_reminder_message = await channel.send(f"Did <@{USER_IDS[0]}> check if the README was updated for today's build?")
+    await producer_reminder_message.add_reaction("✅")
     print(f"[{datetime.datetime.now()}] Reminder sent in #{channel.name} (ID: {CHANNEL_IDS[0]})")
 
-    def check(reaction, user):
+    monitor = {}
+    monitor[reminder_message.id] = {"role_id": ROLE_IDS, "emoji": "✅", "done": False}
+    monitor[producer_reminder_message.id] = {"user_id": USER_IDS[0], "emoji": "✅", "done": False}
+
+    @bot.event
+    async def on_reaction_add(reaction, user):
         if user.bot:
             return False
-        if reaction.message.id != reminder_message.id:
+        if reaction.message.id not in [reminder_message.id, producer_reminder_message.id]:
             return False
         if str(reaction.emoji) != "✅":
             return False
 
+        message_id = reaction.message.id
         member = reaction.message.guild.get_member(user.id)
         return any(role.id in ROLE_IDS for role in member.roles)
 
@@ -80,7 +93,6 @@ async def lab_reminder(): ### Saturday Leads reminder
     now = datetime.datetime.now(TZ)
     if now.weekday() != REMINDER2_DAY:
         return
-
     print(f"[{datetime.datetime.now()}] Starting reminder")
 
     channel_id = CHANNEL_IDS[1]
@@ -98,7 +110,7 @@ async def lab_reminder(): ### Saturday Leads reminder
 
     guild = channel.guild
     role = guild.get_role(ROLE_IDS[2])
-    responders = set()
+    responders = set(IGNORE_USER_IDS) # ignore Rohit, Kristine
 
     def check(message):
         if message.channel.id != channel_id:
@@ -108,27 +120,43 @@ async def lab_reminder(): ### Saturday Leads reminder
         if role not in message.author.roles:
             return False
         return True
-
-    try:
-        end_time = datetime.datetime.now() + datetime.timedelta(minutes=10)
-        print(f"[{datetime.datetime.now()}] Waiting for responses until {end_time}")
-        while datetime.datetime.now() < end_time:
-            msg = await bot.wait_for("message", timeout=WAIT_TIME*60.0, check=check)
-            responders.add(msg.author.id)
-            print(f"[{datetime.datetime.now()}] {msg.author.name} responded")
-    except asyncio.TimeoutError:
-        pass
-
-    missing_responders = [member for member in role.members if member.id not in responders]
-    if missing_responders:
-        mentions = " ".join(m.mention for m in missing_responders)
-        await channel.send(f"{mentions} - Another reminder to post your standups!")
-        print(f"[{datetime.datetime.now()}] Missing responses: {mentions}")
-    else:
-        await channel.send("Everyone responded!")
-        print(f"[{datetime.datetime.now()}] All responders responded")
-
-
+    
+    async def responseReminder():
+        missing_responders = [member for member in role.members if member.id not in responders]
+        if missing_responders:
+            mentions = " ".join(m.mention for m in missing_responders)
+            await channel.send(f"{mentions} - Another reminder to post your standups!")
+            print(f"[{datetime.datetime.now()}] Missing responses: {mentions}")
+        else:
+            await channel.send("Everyone responded!")
+            print(f"[{datetime.datetime.now()}] All responders responded")
+    loop = asyncio.get_running_loop()
+    end_time = loop.time() + FIRST_WAIT # first ping
+    end_time_final = loop.time() + FINAL_WAIT (hours=5, minutes=10) #final ping
+    async def firstPing():
+        firstPing = False
+        while loop.time() < end_time_final:
+            await asyncio.sleep(10) # to change to 10 minutes
+            if not(firstPing) and (loop.time() > end_time):
+                firstPing = True
+                await responseReminder()
+                break
+    firstPingReport = asyncio.create_task(firstPing())
+    print(f"[{datetime.datetime.now()}] Waiting for responses until {datetime.datetime.now() + datetime.timedelta(FIRST_WAIT)}, {datetime.datetime.now() + datetime.timedelta(FINAL_WAIT)}")
+    while loop.time() < end_time_final:
+        WAIT_TIME = end_time_final - loop.time()
+        try:
+            msg = await bot.wait_for("message", timeout=WAIT_TIME, check=check) 
+            author_string = f'{msg.author.name}'
+            if msg.author.id in COLEAD_IDS:
+                responders.update(COLEAD_IDS)
+                author_string += " Coleads" 
+            else:
+                responders.add(msg.author.id)
+            print(f"[{datetime.datetime.now()}] {author_string} responded")
+        except asyncio.TimeoutError:
+            pass
+    await responseReminder()
 
 @bot.event
 async def on_ready():
