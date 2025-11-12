@@ -158,6 +158,42 @@ async def lab_reminder(): ### Saturday Leads reminder
             pass
     await responseReminder()
 
+def parse_time(timestr: str) -> int:
+        units = {"s": 1, "m": 60, "min":60, "h": 3600, "d": 3600*24, "w": 60*60*24*7}
+        try:
+            total_time = 0
+            time_list = timestr.split() 
+            for time in time_list:
+                total_time += int(units[time[-1]]) * int(time[:-1])
+            return total_time
+        except (KeyError, ValueError):
+            raise commands.BadArgument("Time must end with s, m, min, h, d, w (e.g. 10s, 5m, 1h)")
+        
+@bot.command()
+async def remind(ctx, message_id: int, *, time: str):  #!remind [message_id] 12h 30m
+    print(f"[{datetime.datetime.now()}] Starting reminder for message: {message_id}")
+    delay = parse_time(time)
+    try: 
+        msg = await ctx.channel.fetch_message(message_id)
+    except discord.NotFound:
+        await ctx("Can't find a message with that ID in this channel.")
+        return
+    
+    remind_date = datetime.datetime.now(TZ) + datetime.timedelta(seconds = delay)
+    await ctx.send(f'⏳ Confirmed. Will send a copy of that message at {remind_date.strftime("%H:%M %p")}')
+
+    files = [await attachment.to_file() for attachment in msg.attachments]
+    mentions = msg.mentions #list of users mentioned in original message
+    allowed_mentions = discord.AllowedMentions(users=mentions)
+
+    # Wait
+    await asyncio.sleep(delay)
+    # Resend message content
+    await ctx.send(f"📋 Reminder of message from {msg.author.mention}:\n{msg.content}", files=files, allowed_mentions=allowed_mentions)
+    # Embeds if any
+    for embed in msg.embeds:
+        await ctx.send(embed=embed)
+
 @bot.event
 async def on_ready():
     print(f'{bot.user.name} has connected to Discord!')
