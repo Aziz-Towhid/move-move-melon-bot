@@ -171,7 +171,7 @@ def parse_time(timestr: str) -> int:
         
 @bot.command()
 async def remind(ctx, message_id: int, *, time: str):  #!remind [message_id] 12h 30m
-    print(f"[{datetime.datetime.now()}] Starting message reminder")
+    print(f"[{datetime.datetime.now()}] Starting reminder for message: {message_id}")
     delay = parse_time(time)
     try: 
         msg = await ctx.channel.fetch_message(message_id)
